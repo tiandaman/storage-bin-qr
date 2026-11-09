@@ -1,5 +1,8 @@
 /* Storage Bins — single-page app. Data lives in Supabase (see supabase/schema.sql). */
 const { SUPABASE_URL, SUPABASE_KEY } = window.APP_CONFIG;
+// Read before the client consumes the URL: did we arrive from a password-reset email?
+let recovering = /type=recovery/.test(location.hash);
+const linkError = /error_description=([^&]+)/.exec(location.hash)?.[1];
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const BUCKET = "box-photos";
 
@@ -74,6 +77,7 @@ async function refresh() { await loadData(); route(); }
 async function route() {
   if (stopScanner) { stopScanner(); stopScanner = null; }
   if (!session) { nav.innerHTML = ""; return renderLogin(); }
+  if (recovering) { nav.innerHTML = ""; return renderSetPassword(); }
 
   nav.innerHTML = `<a href="#/scan">Scan</a><a href="#/labels">Labels</a>
     <button class="link" id="signout">Sign out</button>`;
@@ -106,12 +110,46 @@ function renderLogin() {
       <label for="pw">Password</label>
       <input id="pw" type="password" autocomplete="current-password" required>
       <div class="row"><button class="grow">Sign in</button></div>
-      <p class="err" id="lerr"></p>
+      <div class="row"><button type="button" class="link" id="forgot">Forgot password?</button></div>
+      <p class="err" id="lerr">${linkError ? "That reset link didn't work: " + esc(decodeURIComponent(linkError.replace(/\+/g, " "))) + ". Request a new one." : ""}</p>
     </form>`;
   $("#login").onsubmit = async (e) => {
     e.preventDefault();
     const { error } = await sb.auth.signInWithPassword({ email: $("#em").value.trim(), password: $("#pw").value });
     if (error) $("#lerr").textContent = error.message;
+  };
+  $("#forgot").onclick = async () => {
+    const email = $("#em").value.trim();
+    const msg = $("#lerr");
+    if (!email) { msg.textContent = "Type your email above first, then tap Forgot password."; $("#em").focus(); return; }
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: baseUrl() });
+    msg.className = error ? "err" : "muted";
+    msg.textContent = error ? error.message
+      : "If that email has an account, a reset link is on its way. Open it on this device, then choose a new password.";
+  };
+}
+
+function renderSetPassword() {
+  app.innerHTML = `
+    <form class="card login" id="setpw">
+      <h1>Choose a new password</h1>
+      <label for="np">New password</label>
+      <input id="np" type="password" autocomplete="new-password" minlength="6" required>
+      <label for="np2">Type it again</label>
+      <input id="np2" type="password" autocomplete="new-password" minlength="6" required>
+      <div class="row"><button class="grow">Save password</button></div>
+      <p class="err" id="perr"></p>
+    </form>`;
+  $("#np").focus();
+  $("#setpw").onsubmit = async (e) => {
+    e.preventDefault();
+    if ($("#np").value !== $("#np2").value) { $("#perr").textContent = "The passwords don't match."; return; }
+    const { error } = await sb.auth.updateUser({ password: $("#np").value });
+    if (error) { $("#perr").textContent = error.message; return; }
+    recovering = false;
+    toast("Password updated");
+    location.hash = "#/";
+    route();
   };
 }
 
@@ -478,6 +516,7 @@ window.addEventListener("hashchange", route);
 sb.auth.onAuthStateChange((event, s) => {
   const had = !!session;
   session = s;
-  if (event === "SIGNED_OUT") { loaded = false; boxes = items = photos = []; route(); }
+  if (event === "PASSWORD_RECOVERY") { recovering = true; route(); }
+  else if (event === "SIGNED_OUT") { loaded = false; boxes = items = photos = []; route(); }
   else if (event === "INITIAL_SESSION" || (event === "SIGNED_IN" && !had)) route();
 });

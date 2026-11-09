@@ -29,3 +29,22 @@ create policy "signed-in full access" on boxes
   for all to authenticated using (true) with check (true);
 create policy "signed-in full access" on items
   for all to authenticated using (true) with check (true);
+
+-- ---- Photos (added in migration 002) ----
+create table photos (
+  id uuid primary key default gen_random_uuid(),
+  box_id uuid not null references boxes(id) on delete cascade,
+  path text not null,                    -- file path in the box-photos bucket
+  created_at timestamptz default now()
+);
+alter table photos enable row level security;
+create policy "signed-in full access" on photos
+  for all to authenticated using (true) with check (true);
+
+insert into storage.buckets (id, name, public) values ('box-photos', 'box-photos', false);
+create policy "signed-in read box photos" on storage.objects
+  for select to authenticated using (bucket_id = 'box-photos');
+create policy "signed-in add box photos" on storage.objects
+  for insert to authenticated with check (bucket_id = 'box-photos');
+create policy "signed-in remove box photos" on storage.objects
+  for delete to authenticated using (bucket_id = 'box-photos');

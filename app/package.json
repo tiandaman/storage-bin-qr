@@ -1,0 +1,24 @@
+{
+  "name": "storage-bin-qr",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --mode demo",
+    "check": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build && rm -rf ../assets && cp -r dist/. ../",
+    "build:demo": "vite build --mode demo --outDir demo-dist"
+  },
+  "dependencies": {
+    "@fontsource/barlow": "^5.3.0",
+    "@fontsource/barlow-condensed": "^5.3.0",
+    "@supabase/supabase-js": "^2.119.0",
+    "jsqr": "^1.4.0",
+    "preact": "^11.2.0",
+    "qrcode-generator": "^2.0.4"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  }
+}
